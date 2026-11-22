@@ -59,6 +59,7 @@ function span(turn, fields, values) {
       "session.id": turn.sessionID,
       "gen_ai.conversation.id": turn.sessionID,
       "gen_ai.agent.name": agent,
+      "opencode.subagent.session.id": turn.subagentID,
       ...values,
     }),
     ...(fields.status ? { status: fields.status } : {}),
@@ -143,7 +144,11 @@ function otherSpan(turn, call) {
       start: call.start,
       end: call.end,
     },
-    { ...modelValues(call.model, call.call), "opencode.request.kind": call.kind },
+    {
+      ...modelValues(call.model, call.call),
+      "opencode.request.kind": call.kind,
+      "opencode.session.title": call.title,
+    },
   )
 }
 
@@ -153,6 +158,7 @@ export function payload(turn, { version, opencode, limit }) {
     turn,
     {
       spanId: turn.spanId,
+      parentSpanId: turn.parentSpanId,
       name: `invoke_agent ${agent}`,
       start: turn.start,
       end: turn.end,

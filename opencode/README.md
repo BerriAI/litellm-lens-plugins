@@ -51,11 +51,13 @@ Options win over environment variables
 
 ## What a trace holds
 
-One trace per turn, grouped into a session by OpenCode's session id
+One trace per turn, grouped into a session by OpenCode's session id. Lens shows a session's turns together as one trace
 
 - `invoke_agent opencode`: the turn, with the prompt and the final reply
-- `chat <model>`: one per model call, with the system prompt, the messages sent, the reply, tokens and the provider's response id. The session title call is included without content so the turn's cost adds up to what the gateway billed
+- `chat <model>`: one per model call, with the system prompt, the messages added since the previous reply, the reply, tokens and the provider's response id. Earlier messages are on the earlier calls, so a session reads top to bottom without repeats. The session title call is included so the turn's cost adds up to what the gateway billed. It carries the title as `opencode.session.title` and no messages, so it adds nothing to the conversation
 - `execute_tool <name>`: one per tool call, with its input and result
+
+A subagent's turns sit under the `execute_tool subagent` call that started it, in the parent's trace and session, and carry the subagent's own session id as `opencode.subagent.session.id`
 
 Cost is never taken from OpenCode's own estimate. Lens matches each model call to the gateway's spend record by the provider's response id, which the plugin reads from the start of the response
 

@@ -149,6 +149,72 @@ test("closing sends an unfinished turn as interrupted, and each turn gets its ow
   assert.notEqual(turns[0].traceId, turns[1].traceId)
 })
 
+test("each model call carries only the messages added since the previous reply", async () => {
+  const [, step] = await spans((recorder) => {
+    recorder.event(event("session.execution.started"))
+    recorder.context({
+      sessionID,
+      system: [],
+      messages: [
+        { role: "user", content: [{ type: "text", text: "first" }] },
+        { role: "assistant", content: [{ type: "tool-call", id: "tool_1", name: "read", input: {} }] },
+        { role: "tool", content: [{ type: "tool-result", id: "tool_1", result: { type: "text", value: "secret" } }] },
+        { role: "user", content: [{ type: "text", text: "second" }] },
+      ],
+    })
+    recorder.event(event("session.step.started", { assistantMessageID: "a1", model }))
+    recorder.event(event("session.step.ended", { assistantMessageID: "a1" }))
+    recorder.event(event("session.execution.succeeded"))
+  })
+  assert.deepEqual(JSON.parse(step.values["gen_ai.input.messages"]), [
+    { role: "tool", parts: [{ type: "tool_call_response", id: "tool_1", response: "secret" }] },
+    { role: "user", parts: [{ type: "text", content: "second" }] },
+  ])
+})
+
+test("a turn started by a subagent's completion notice has that notice as its prompt", async () => {
+  const [root] = await spans((recorder) => {
+    recorder.event(event("session.inbox.enqueued", { inboxID: "in_1", item: { type: "synthetic", payload: { text: "<subagent>2 words</subagent>" } } }))
+    recorder.event(event("session.execution.started"))
+    recorder.event(event("session.inbox.delivered", { inboxID: "in_1" }))
+    recorder.event(event("session.execution.succeeded"))
+  })
+  assert.equal(JSON.parse(root.values["gen_ai.input.messages"])[0].parts[0].content, "<subagent>2 words</subagent>")
+})
+
+test("the session title call carries the title it produced and no messages", async () => {
+  const title = (await spans((recorder) => {
+    recorder.event(event("session.execution.started"))
+    recorder.response(call("title", "call_title", "msg_title"))
+    recorder.event(event("session.renamed", { title: "Reading a note" }))
+    recorder.event(event("session.execution.succeeded"))
+  })).at(-1)
+  assert.equal(title.values["opencode.session.title"], "Reading a note")
+  assert.equal(title.values["gen_ai.input.messages"], undefined)
+  assert.equal(title.values["gen_ai.output.messages"], undefined)
+})
+
+test("a subagent's turn joins its parent's trace under the tool call that started it", async () => {
+  const child = "ses_child"
+  const [parent, sub] = record((recorder) => {
+    recorder.event(event("session.execution.started"))
+    recorder.event(event("session.step.started", { assistantMessageID: "a1", model }))
+    recorder.event(event("session.tool.called", { assistantMessageID: "a1", id: "tool_1", input: {} }))
+    recorder.event({ type: "session.created", data: { sessionID: child, parentID: sessionID } })
+    recorder.event(event("session.tool.progress", { id: "tool_1", metadata: { sessionID: child } }))
+    recorder.event({ type: "session.execution.started", data: { sessionID: child } })
+    recorder.event(event("session.execution.succeeded"))
+    recorder.event({ type: "session.execution.succeeded", data: { sessionID: child } })
+  })
+  await sub.settled
+  const [root] = payload(sub, { version: "0.1.0", opencode: "2.3.2", limit: 1000 }).resourceSpans[0].scopeSpans[0].spans
+  const values = Object.fromEntries(root.attributes.map(({ key, value }) => [key, Object.values(value)[0]]))
+  assert.equal(root.traceId, parent.traceId)
+  assert.equal(root.parentSpanId, parent.tools.get("tool_1").spanId)
+  assert.equal(values["session.id"], sessionID)
+  assert.equal(values["opencode.subagent.session.id"], child)
+})
+
 test("content longer than the limit is cut and says how much was dropped", async () => {
   const [, , , tool] = await spans((recorder) => {
     toolTurn(recorder)

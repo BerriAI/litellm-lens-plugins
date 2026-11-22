@@ -16,9 +16,10 @@ export class Recorder {
   }
 
   context(input) {
+    const answered = input.messages.findLastIndex((message) => message.role === "assistant")
     this.#session(input.sessionID).context = {
       system: structuredClone(input.system),
-      messages: structuredClone(input.messages),
+      messages: structuredClone(input.messages.slice(answered + 1)),
     }
   }
 
@@ -50,8 +51,25 @@ export class Recorder {
     const session = this.#session(data.sessionID)
     const step = () => this.#turn(session).steps.find((item) => item.id === data.assistantMessageID)
     switch (event.type) {
+      case "session.created":
+        session.parentID = data.parentID
+        return
+      case "session.renamed": {
+        const titled = session.turn?.other.findLast((call) => call.kind === "title")
+        if (titled) titled.title = data.title
+        return
+      }
+      case "session.tool.progress": {
+        const child = data.metadata?.sessionID
+        const tool = session.turn?.tools.get(data.id)
+        if (!child || !tool || this.#session(child).parentID !== session.id) return
+        this.#session(child).spawn = { root: session.turn.sessionID, traceId: session.turn.traceId, spanId: tool.spanId }
+        return
+      }
       case "session.inbox.enqueued":
-        if (data.item?.type === "user") session.inbox.set(data.inboxID, data.item.payload?.text ?? "")
+        if (data.item?.type === "user" || data.item?.type === "synthetic") {
+          session.inbox.set(data.inboxID, data.item.payload?.text ?? "")
+        }
         return
       case "session.inbox.delivered":
         if (!session.inbox.has(data.inboxID)) return
@@ -128,8 +146,10 @@ export class Recorder {
 
   #turn(session) {
     session.turn ??= {
-      sessionID: session.id,
-      traceId: id(16),
+      sessionID: session.spawn?.root ?? session.id,
+      subagentID: session.spawn ? session.id : undefined,
+      traceId: session.spawn?.traceId ?? id(16),
+      parentSpanId: session.spawn?.spanId,
       spanId: id(8),
       start: this.#now(),
       prompts: [],

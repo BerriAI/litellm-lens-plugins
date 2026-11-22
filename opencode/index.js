@@ -4,7 +4,7 @@ import { Recorder } from "./src/recorder.js"
 import { payload } from "./src/spans.js"
 import { responseId } from "./src/response.js"
 
-const version = "0.1.1"
+const version = "0.1.2"
 
 export default {
   id: "litellm-lens",
