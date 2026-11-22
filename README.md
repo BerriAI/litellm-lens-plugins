@@ -5,10 +5,10 @@ Lens plugins for coding agents. Each plugin sends an agent's chats to [LiteLLM L
 | Agent | Folder | Status |
 | --- | --- | --- |
 | Codex | [`codex/`](codex/README.md) | Public preview |
-| Claude Code | `claude-code/` | Coming in its own pull request |
+| Claude Code | [`claude-code/`](claude-code/README.md) | Public preview |
 | OpenCode | [`opencode/`](opencode/README.md) | Public preview, OpenCode 2.3.2 or later |
 
-Each agent has its own folder with its own README, tests and version. The repository root holds only the marketplace manifests the agents read (`.agents/plugins/marketplace.json` for Codex), the root `package.json` OpenCode installs from, the license and this page.
+Each agent has its own folder with its own README, tests and version. The repository root holds only the marketplace manifests the agents read (`.agents/plugins/marketplace.json` for Codex, `.claude-plugin/marketplace.json` for Claude Code), the root `package.json` OpenCode installs from, the license and this page.
 
 ## Codex
 
@@ -26,6 +26,15 @@ curl -fsSL https://raw.githubusercontent.com/BerriAI/litellm-lens-plugins/main/c
 See [`codex/README.md`](codex/README.md) for what is recorded, setup options and limits.
 
 Moving from `BerriAI/litellm-lens-codex-integration`: the plugin keeps its name, `litellm-lens@berriai-lens`, and its local settings. Remove the old marketplace with `codex plugin marketplace remove berriai-lens`, then run the two commands above and `setup` once so Codex trusts the hooks at their new version.
+
+## Claude Code
+
+```bash
+claude plugin marketplace add BerriAI/litellm-lens-plugins
+claude plugin install litellm-lens@berriai-lens
+```
+
+Claude Code asks for your LiteLLM gateway URL and a LiteLLM key on install. The plugin stays off while Claude Code's own trace export is on, so a chat is never recorded twice. See [`claude-code/README.md`](claude-code/README.md) for what is recorded and the limits.
 
 ## OpenCode
 
