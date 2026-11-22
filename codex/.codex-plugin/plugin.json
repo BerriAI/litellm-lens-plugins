@@ -1,6 +1,6 @@
 {
   "name": "litellm-lens",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Send visible Codex session messages, tools, and subagents to LiteLLM Lens.",
   "author": {
     "name": "BerriAI"

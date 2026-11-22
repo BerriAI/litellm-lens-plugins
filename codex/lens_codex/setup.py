@@ -67,10 +67,22 @@ def connect(reader, writer) -> bool:
                 return False
 
 
-def terminal_setup() -> None:
+def unattended(url: str, key_env: str, name: str) -> None:
+    key = os.environ.get(key_env, "").strip()
+    if not key:
+        raise ValueError(f"The environment variable {key_env} is empty. Export the key there and run setup again.")
+    configure({"gateway": gateway_url(url), "api_key": key, "agent_name": name}, enabled=False)
+
+
+def terminal_setup(url: str | None = None, key_env: str | None = None, name: str = "codex") -> None:
     settings = config()
     configured = bool(settings.get("gateway") and settings.get("api_key"))
-    if configured:
+    if url or key_env:
+        if not (url and key_env):
+            raise ValueError("Pass --url and --key-env together.")
+        unattended(url, key_env, name)
+        configured = False
+    elif configured:
         refresh_plugin()
     else:
         # curl | bash consumes stdin. Read human input from the controlling terminal instead.

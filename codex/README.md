@@ -48,6 +48,19 @@ Follow all five steps to install and connect the plugin for **both desktop and C
 
 Desktop and CLI use the same profile by default. If you use a custom `CODEX_HOME`, install into the profile your desktop uses.
 
+### Without prompts
+
+For a coding agent or a script, pass the address and the name of the environment variable that holds the key. The key itself never appears in the command:
+
+```bash
+codex plugin marketplace add BerriAI/litellm-lens-plugins
+codex plugin add litellm-lens@berriai-lens
+bash "$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/berriai-lens/litellm-lens/*/ | tail -1)scripts/run.sh" \
+  setup --url https://your-gateway.example --key-env LITELLM_API_KEY --agent-name codex
+```
+
+This checks the address and key, trusts the plugin's hooks, starts the local helper and turns recording on without asking for confirmation, so only run it when you intend new prompts, replies and tool output to be sent to that address. Addresses other than localhost must use HTTPS.
+
 ### Ask Codex
 
 Paste this into a Codex desktop or CLI chat:

@@ -14,6 +14,9 @@ def main() -> None:
         sub.add_parser(name)
     setup = sub.add_parser("setup")
     setup.add_argument("--browser", action="store_true", help="Open the optional settings page")
+    setup.add_argument("--url", help="Gateway or Lens address; connects without asking questions")
+    setup.add_argument("--key-env", help="Name of the environment variable that holds the key")
+    setup.add_argument("--agent-name", default="codex")
     serving = sub.add_parser("serve")
     serving.add_argument("--port", type=int, default=18734)
     args = parser.parse_args()
@@ -41,7 +44,7 @@ def main() -> None:
             serve(args.port)
         elif args.command == "setup":
             from .setup import browser_setup, terminal_setup
-            browser_setup() if args.browser else terminal_setup()
+            browser_setup() if args.browser else terminal_setup(args.url, args.key_env, args.agent_name)
         elif args.command == "status":
             from .delivery import status
             print(json.dumps(status(), indent=2))
