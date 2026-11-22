@@ -1,7 +1,7 @@
 """Read visible session items within one hook-authorized turn."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 import json
 from pathlib import Path
@@ -148,12 +148,28 @@ def model_call(payload: dict, at: float, model: str | None) -> ModelCall | None:
     return ModelCall(identity, at, counts, model)
 
 
+def timed(entries: dict[str, Entry], ran: dict[str, float], windows: list[tuple[float, float]]) -> dict[str, Entry]:
+    """Codex stamps a tool item with one instant, so time it from the model's call record to its output record."""
+    result, previous = {}, {}
+    for identity, at in sorted(ran.items(), key=lambda item: item[1]):
+        window = max((w for w in windows if w[0] <= at <= w[1]), default=None)
+        if window:
+            start = previous.get(window, window[0])
+            later = any(window[0] <= other <= window[1] and other > at for other in ran.values())
+            previous[window] = end = at if later else window[1]
+            result[identity] = replace(entries[identity], start=start, end=max(start, end))
+    return result
+
+
 def codex_recording(path: str, offset: int, turn_id: str) -> Recording:
     current, model, complete = None, None, False
     ended, error = None, None
     entries: dict[str, Entry] = {}
     fallback: dict[str, Entry] = {}
     calls: dict[str, ModelCall] = {}
+    opened: dict[str, float] = {}
+    windows: list[tuple[float, float]] = []
+    ran: dict[str, float] = {}
     for index, record in enumerate(records(path, offset)):
         payload = record.get("payload", {})
         if not isinstance(payload, dict):
@@ -179,6 +195,13 @@ def codex_recording(path: str, offset: int, turn_id: str) -> Recording:
             entry = codex_item(item, start, end, model)
             if entry:
                 entries[entry.identity or str(index)] = entry
+                if entry.tool:
+                    ran[entry.identity or str(index)] = at
+        if record_type == "response_item" and isinstance(payload.get("call_id"), str):
+            if str(kind).endswith("_call"):
+                opened[payload["call_id"]] = at
+            elif str(kind).endswith("_call_output") and payload["call_id"] in opened:
+                windows.append((opened.pop(payload["call_id"]), at))
         if record_type == "response_item" and kind == "message" and payload.get("role") == "assistant" and payload.get("channel") != "analysis":
             identity = str(payload.get("id") or index)
             fallback[identity] = Entry(identity, at, at, text=visible_text(payload.get("content")), model=model)
@@ -191,6 +214,7 @@ def codex_recording(path: str, offset: int, turn_id: str) -> Recording:
             current = None
     for identity, entry in fallback.items():
         entries.setdefault(identity, entry)
+    entries.update(timed(entries, ran, windows))
     return Recording(tuple(sorted(entries.values(), key=lambda entry: entry.start)), complete, ended=ended,
                      error=error, calls=tuple(sorted(calls.values(), key=lambda call: call.end)))
 

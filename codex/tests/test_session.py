@@ -24,6 +24,23 @@ class SessionTests(Case):
     def item(self, item, turn='t', start=1000):
         return self.codex_event('item_completed', turn_id=turn, item=item, started_at_ms=start, completed_at_ms=start+50)
 
+    def test_tool_is_timed_from_its_call_record_to_its_output_record(self):
+        def at(second, record):
+            return {**record, 'timestamp': f'2026-10-05T00:00:{second:06.3f}Z'}
+        command = lambda identity: {'type': 'CommandExecution', 'id': identity, 'command': ['sh', '-c', 'pwd'], 'exit_code': 0}
+        call = lambda kind, identity: {'type': 'response_item', 'payload': {'type': kind, 'call_id': identity}}
+        records = [self.codex_event('task_started', turn_id='t'),
+                   at(10, call('custom_tool_call', 'one')),
+                   at(10.3, self.item(command('first'), start=1791158410300)),
+                   at(10.4, self.item(command('second'), start=1791158410400)),
+                   at(10.6, call('custom_tool_call_output', 'one')),
+                   at(12, self.item(command('alone'), start=1791158412000)),
+                   self.codex_event('task_complete', turn_id='t')]
+        tools = {e.identity: e for e in read_recording(str(self.file('codex', records)), 0, 't').entries}
+        base = tools['first'].start
+        spans = {name: (round(e.start - base, 3), round(e.end - base, 3)) for name, e in tools.items()}
+        self.assertEqual(spans, {'first': (0.0, 0.3), 'second': (0.3, 0.6), 'alone': (2.0, 2.05)})
+
     def test_visible_items_preserve_commentary_repeats_failure_and_model(self):
         records = [self.codex_event('task_started', turn_id='t'),
                    {'type': 'turn_context', 'payload': {'turn_id': 't', 'model': 'model-a'}},
@@ -72,14 +89,18 @@ class SessionTests(Case):
         self.assertIn('Transcript unavailable',values['lens.capture.warning'])
         self.assertIn('Done.',values['gen_ai.output.messages'])
 
-    def test_transcript_messages_use_chain_convention_without_fake_llm_calls(self):
+    def test_turn_carries_the_prompt_and_final_reply_without_separate_message_spans(self):
         from lens_codex.session import Entry,Recording
         self.record()
-        spans=trace.build_trace(self.turn(),[],state.config(),None,Recording((Entry('a',101,102,text='Hello',model='model-a'),),True))['resourceSpans'][0]['scopeSpans'][0]['spans']
-        values=attributes(spans[-1])
-        self.assertEqual(values['openinference.span.kind'],'CHAIN')
-        self.assertEqual(json.loads(values['output.value']),[{'role':'assistant','content':'Hello'}])
-        self.assertEqual(values['llm.model_name'],'model-a')
+        recording=Recording((Entry('u',100,100,role='user',text='Fix it'),Entry('a',101,102,text='Looking'),
+                             Entry('b',103,104,text='Fixed.')),True)
+        spans=trace.build_trace(self.turn(),[],state.config(),None,recording)['resourceSpans'][0]['scopeSpans'][0]['spans']
+        self.assertEqual(len(spans),1)
+        self.assertTrue(spans[0]['name'].startswith('invoke_agent '))
+        values=attributes(spans[0])
+        self.assertEqual(json.loads(values['gen_ai.input.messages']),[{'role':'user','parts':[{'type':'text','content':'Fix it'}]}])
+        self.assertEqual(json.loads(values['gen_ai.output.messages']),[{'role':'assistant','parts':[{'type':'text','content':'Fixed.'}]}])
+        self.assertNotIn('lens.capture.messages_separate',values)
         self.assertNotIn('gen_ai.usage.input_tokens',values)
 
     def test_missing_stop_is_recovered_only_after_explicit_transcript_completion(self):
@@ -181,7 +202,8 @@ class SessionTests(Case):
         self.record()
         usage = {'input_tokens': 10, 'cached_input_tokens': 4, 'cache_write_input_tokens': 0,
                  'output_tokens': 3, 'reasoning_output_tokens': 1}
-        recording = Recording((Entry('a', 101, 102, text='Checking', model='model-a'),
+        recording = Recording((Entry('u', 100, 100, role='user', text='Fix it'),
+                               Entry('a', 101, 102, text='Checking', model='model-a'),
                                Entry('tool', 103, 104, tool='Bash', arguments={'command': 'ls'}, result='ok')),
                               True, calls=(ModelCall('resp_1', 102.5, usage, 'model-a'),
                                            ModelCall('resp_2', 106, usage, 'model-a')))
@@ -192,8 +214,15 @@ class SessionTests(Case):
         self.assertEqual(first[0]['parentSpanId'], spans[0]['spanId'])
         self.assertEqual(first[1]['gen_ai.usage.input_tokens'], '10')
         self.assertEqual(first[1]['gen_ai.usage.cache_read.input_tokens'], '4')
-        self.assertEqual(json.loads(first[1]['gen_ai.output.messages'])[0]['content'], 'Checking')
-        self.assertNotIn('gen_ai.output.messages', second[1])
-        # The second call cannot have started before the tool it waited for had finished.
-        self.assertEqual(second[0]['startTimeUnixNano'], str(104 * 10**9))
+        tool_id = next(e.identity for e in recording.entries if e.tool)
+        self.assertEqual(json.loads(first[1]['gen_ai.output.messages']), [{'role': 'assistant', 'parts': [
+            {'type': 'text', 'content': 'Checking'},
+            {'type': 'tool_call', 'id': tool_id, 'name': 'Bash', 'arguments': {'command': 'ls'}}]}])
+        self.assertEqual(json.loads(first[1]['gen_ai.input.messages']),
+                         [{'role': 'user', 'parts': [{'type': 'text', 'content': 'Fix it'}]}])
+        # A tool result goes in as a tool message, so Lens does not show it as a user prompt.
+        self.assertEqual(json.loads(second[1]['gen_ai.input.messages']), [{'role': 'tool', 'parts': [
+            {'type': 'tool_call_response', 'id': tool_id, 'response': 'ok'}]}])
+        # The second call starts just after the tool it waited for, so it never sorts before that tool.
+        self.assertEqual(second[0]['startTimeUnixNano'], str(104 * 10**9 + 10**6))
         self.assertEqual(len({span['spanId'] for span, _ in calls}), 2)

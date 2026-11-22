@@ -47,7 +47,7 @@ class PrivacyTests(Case):
         root = self.payload()["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
         values = {a["key"]: a["value"] for a in root["attributes"]}
         messages = json.loads(values["gen_ai.input.messages"]["stringValue"])
-        self.assertEqual([m["content"] for m in messages], ["First request", "Clarification"])
+        self.assertEqual([part["content"] for part in messages[0]["parts"]], ["First request", "Clarification"])
 
     def test_queue_limit_retains_existing_content(self):
         self.record()

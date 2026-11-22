@@ -36,9 +36,11 @@ def split(payload: dict, limit: int = MAX_BATCH_BYTES) -> list[dict]:
                 import json
                 messages = json.loads(text)
                 for message in messages:
-                    content = message.get("content", "")
-                    content = content if isinstance(content, str) else encode(content)
-                    message["content"] = excerpt(content, max(512, len(content.encode()) // 2))
+                    for part in message.get("parts", []):
+                        for key in ("content", "response", "arguments"):
+                            if key in part:
+                                content = part[key] if isinstance(part[key], str) else encode(part[key])
+                                part[key] = excerpt(content, max(512, len(content.encode()) // 2))
                 attr["value"]["stringValue"] = encode(messages)
             else:
                 attr["value"]["stringValue"] = excerpt(text, len(text.encode()) // 2)

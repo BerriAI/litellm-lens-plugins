@@ -38,8 +38,17 @@ def span(trace_id: str, span_id: str, name: str, start: float, end: float, value
     return result
 
 
-def messages(role: str, value: object) -> str:
-    return json.dumps([{"role": role, "content": value}], ensure_ascii=False)
+def text_part(value: object) -> dict:
+    return {"type": "text", "content": value if isinstance(value, str) else encode(value)}
+
+
+def messages_item(role: str, parts: list[dict]) -> dict:
+    return {"role": role, "parts": parts}
+
+
+def messages(role: str, parts: list[dict]) -> str:
+    """One message in the OpenTelemetry GenAI parts form Lens reads for every agent."""
+    return encode([{"role": role, "parts": parts}])
 
 
 def build_trace(turn: dict, rows: list[dict], settings: dict, usage: dict | None,
@@ -53,6 +62,8 @@ def build_trace(turn: dict, rows: list[dict], settings: dict, usage: dict | None
     stop = next((d for _, d in reversed(events) if d["hook_event_name"] in {"Stop", "SubagentStop"}), {})
     interrupted = any(d["hook_event_name"] == "Interrupt" for _, d in events) or (not stop and not (recording and recording.complete))
     name = turn.get("agent_name") or settings.get("agent_name", client)
+    joined = "\n\n".join(p if isinstance(p, str) else encode(p) for p in prompts)
+    prompt_parts = [text_part(excerpt(joined))] if len(joined.encode()) > 128 * 1024 else [text_part(p) for p in prompts]
     values = {
         "gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": name,
         "gen_ai.agent.id": turn.get("agent_id") or session_id,
@@ -60,10 +71,8 @@ def build_trace(turn: dict, rows: list[dict], settings: dict, usage: dict | None
         "codex.turn.id": turn_id, "codex.capture.source": "lifecycle_hooks",
         "codex.capture.scope": "user prompts, final replies, local tool calls",
         "codex.usage.known": usage is not None,
-        "gen_ai.input.messages": messages("user", excerpt("\n\n".join(
-            p if isinstance(p, str) else encode(p) for p in prompts))) if len(encode(prompts).encode()) > 128 * 1024
-            else json.dumps([{ "role": "user", "content": prompt} for prompt in prompts], ensure_ascii=False),
-        "gen_ai.output.messages": messages("assistant", stop.get("last_assistant_message", "")),
+        "gen_ai.input.messages": messages("user", prompt_parts),
+        "gen_ai.output.messages": messages("assistant", [text_part(stop.get("last_assistant_message", ""))]),
     }
     model = next((d["model"] for _, d in events if d.get("model")), None)
     model = next((entry.model for entry in recording.entries if entry.model), model) if recording else model
@@ -80,17 +89,26 @@ def build_trace(turn: dict, rows: list[dict], settings: dict, usage: dict | None
     values.update({"codex.capture." + key: value for key, value in notes.items()})
     if recording and (recording.warning or not recording.complete):
         values["lens.capture.warning"] = recording.warning or "The session ended without a recorded completion. Content may be incomplete."
+    secret = settings.get("api_key", "")
+
+    def clean(value: object) -> object:
+        return event_content({"prompt": redact(value, secret)})["prompt"]
+
+    said = [entry for entry in recording.entries if not entry.tool and entry.role != "system"] if recording else []
+    tools = [entry for entry in recording.entries if entry.tool] if recording else []
     if recording and recording.entries:
-        if any(entry.role == "user" and not entry.tool for entry in recording.entries):
-            values["lens.capture.messages_separate"] = True
-        if any(entry.role == "assistant" and not entry.tool for entry in recording.entries):
-            values["gen_ai.output.messages"] = "[]"
+        asked = [entry for entry in said if entry.role == "user" and entry.text]
+        replied = [entry for entry in said if entry.role == "assistant" and entry.text]
+        if asked:
+            values["gen_ai.input.messages"] = messages("user", [text_part(clean(entry.text)) for entry in asked])
+        if replied and not stop.get("last_assistant_message"):
+            values["gen_ai.output.messages"] = messages("assistant", [text_part(clean(replied[-1].text))])
         values["lens.capture.source"] = "session_transcript"
         values["lens.capture.complete"] = recording.complete
         values["codex.capture.scope"] = "visible messages and tools; media and hidden reasoning excluded"
     parent_id = stable_id(client + "-turn", session_id, turn["parent_turn"], size=8) if turn.get("parent_turn") else None
     failure = recording.error if recording and recording.error else ("Turn interrupted before a final reply." if interrupted else None)
-    result = [span(trace_id, root_id, name, turn["started"], turn["ended"], values,
+    result = [span(trace_id, root_id, "invoke_agent " + name, turn["started"], turn["ended"], values,
                    parent=parent_id,
                    error=excerpt(str(redact(failure, settings.get("api_key", "")))) if failure else None)]
     calls: dict[str, dict] = {}
@@ -130,33 +148,48 @@ def build_trace(turn: dict, rows: list[dict], settings: dict, usage: dict | None
                                  "gen_ai.tool.call.arguments": encode(content["tool_input"]),
                                  "gen_ai.tool.call.result": content["tool_response"] if isinstance(content["tool_response"], str)
                                  else encode(content["tool_response"])})
-        else:
+        elif entry.role == "system":
             entry_values.update({"openinference.span.kind": "CHAIN", "lens.message.role": entry.role,
-                                 "agent.name": name, "llm.model_name": entry.model,
-                                 "input.value" if entry.role == "user" else "output.value":
-                                     messages(entry.role, content["prompt"])})
+                                 "agent.name": name, "output.value": encode([{"role": "system", "content": content["prompt"]}])})
+        else:
+            # Prompts and replies are on the turn and its model calls, as for every other agent.
+            continue
         result.append(span(trace_id, stable_id(client + "-item", session_id, turn_id, entry.identity, size=8),
                            entry.tool or entry.role.capitalize(), entry.start, entry.end, entry_values, root_id,
                            excerpt(str(redact(entry.error, settings.get("api_key", "")))) if entry.error else None))
-    previous = turn["started"]
-    for call in recording.calls if recording else ():
-        # Codex records when a response finished, not when its request began. The call starts once
-        # the tools that ran since the previous response had finished.
-        start = max([previous] + [entry.end for entry in recording.entries
-                                  if entry.tool and previous < entry.end <= call.end])
-        replies = [entry for entry in recording.entries
-                   if not entry.tool and entry.role == "assistant" and previous < entry.end <= call.end]
-        text = event_content(redact({"prompt": "\n\n".join(entry.text for entry in replies)},
-                                    settings.get("api_key", "")))["prompt"]
+    calls = recording.calls if recording else ()
+    previous = float("-inf")
+    for index, call in enumerate(calls):
+        # Codex records when a response finished, not when its request began. A response's tools
+        # finish after it, so tools between two responses were asked for by the first and read by
+        # the second.
+        following = calls[index + 1].end if index + 1 < len(calls) else float("inf")
+        read = [entry for entry in tools if previous < entry.end <= call.end]
+        start = max([turn["started"] if index == 0 else previous] + [entry.end for entry in read])
+        if read:
+            # Codex often stamps a tool with one instant; start just after it so the call sorts after what it read.
+            start = min(start + 0.001, max(start, call.end))
+        sent = [messages_item("user", [text_part(clean(entry.text)) for entry in said
+                                       if entry.role == "user" and entry.text and previous < entry.end <= call.end])]
+        sent += [messages_item("tool", [{"type": "tool_call_response", "id": entry.identity,
+                                         "response": clean(entry.result)}]) for entry in read]
+        if index == 0 and not sent[0]["parts"]:
+            sent[0] = json.loads(values["gen_ai.input.messages"])[0]
+        output = [text_part(clean(entry.text)) for entry in said
+                  if entry.role == "assistant" and entry.text and previous < entry.end <= call.end]
+        output += [{"type": "tool_call", "id": entry.identity, "name": entry.tool, "arguments": clean(entry.arguments)}
+                   for entry in tools if call.end < entry.end <= following]
         call_values = {"gen_ai.operation.name": "chat", "gen_ai.request.model": call.model,
                        "gen_ai.response.model": call.model, "gen_ai.response.id": call.response_id,
                        "gen_ai.agent.name": name, "gen_ai.agent.id": turn.get("agent_id") or session_id,
+                       "gen_ai.conversation.id": session_id,
                        "gen_ai.usage.input_tokens": call.usage["input_tokens"],
                        "gen_ai.usage.output_tokens": call.usage["output_tokens"],
                        "gen_ai.usage.cache_read.input_tokens": call.usage["cached_input_tokens"],
                        "gen_ai.usage.cache_creation.input_tokens": call.usage["cache_write_input_tokens"],
                        "codex.usage.reasoning_output_tokens": call.usage["reasoning_output_tokens"],
-                       "gen_ai.output.messages": messages("assistant", text) if text else None,
+                       "gen_ai.input.messages": encode([item for item in sent if item["parts"]]),
+                       "gen_ai.output.messages": messages("assistant", output),
                        "lens.capture.source": "session_transcript", "codex.model_call.start": "estimated"}
         result.append(span(trace_id, stable_id(client + "-call", session_id, turn_id, call.response_id, size=8),
                            "chat " + call.model if call.model else "chat", start, call.end, call_values, root_id))
