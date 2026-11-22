@@ -24,7 +24,6 @@ export default {
     })
     const hooks = await Promise.all([
       context.session.hook("context", (input) => recorder.context(input)),
-      context.session.hook("title", (input) => recorder.title(input)),
       context.session.hook("http.request", (input) => recorder.request(input.request)),
       context.session.hook("http.response", (input) =>
         recorder.response({

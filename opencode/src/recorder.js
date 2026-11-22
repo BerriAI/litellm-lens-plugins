@@ -23,13 +23,6 @@ export class Recorder {
     }
   }
 
-  title(input) {
-    this.#session(input.sessionID).titleContext = {
-      system: structuredClone(input.system),
-      messages: structuredClone(input.messages),
-    }
-  }
-
   request(request) {
     this.#requests.set(request, this.#now())
   }
@@ -49,14 +42,7 @@ export class Recorder {
     })
     if (!response.ok) return
     if (response.kind === "primary") session.responses.push(call)
-    else {
-      this.#turn(session).other.push({
-        ...call,
-        spanId: id(8),
-        call,
-        context: response.kind === "title" ? session.titleContext : undefined,
-      })
-    }
+    else this.#turn(session).other.push({ ...call, spanId: id(8), call })
   }
 
   event(event) {
@@ -70,7 +56,7 @@ export class Recorder {
         return
       case "session.renamed": {
         const titled = session.turn?.other.findLast((call) => call.kind === "title")
-        if (titled) titled.output = data.title
+        if (titled) titled.title = data.title
         return
       }
       case "session.tool.progress": {

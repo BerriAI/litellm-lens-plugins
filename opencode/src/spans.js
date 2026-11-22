@@ -133,7 +133,7 @@ function toolSpan(turn, tool, limit) {
   )
 }
 
-function otherSpan(turn, call, limit) {
+function otherSpan(turn, call) {
   return span(
     turn,
     {
@@ -147,13 +147,7 @@ function otherSpan(turn, call, limit) {
     {
       ...modelValues(call.model, call.call),
       "opencode.request.kind": call.kind,
-      "gen_ai.system_instructions": call.context?.system.length
-        ? clip(JSON.stringify(call.context.system.map((item) => ({ type: "text", content: item.text }))), limit)
-        : undefined,
-      "gen_ai.input.messages": call.context ? messages(call.context.messages, limit) : undefined,
-      "gen_ai.output.messages": call.output
-        ? messages([{ role: "assistant", content: [{ type: "text", text: call.output }] }], limit)
-        : undefined,
+      "opencode.session.title": call.title,
     },
   )
 }
@@ -192,7 +186,7 @@ export function payload(turn, { version, opencode, limit }) {
               root,
               ...turn.steps.map((step) => stepSpan(turn, step, limit)),
               ...[...turn.tools.values()].map((tool) => toolSpan(turn, tool, limit)),
-              ...turn.other.map((call) => otherSpan(turn, call, limit)),
+              ...turn.other.map((call) => otherSpan(turn, call)),
             ],
           },
         ],

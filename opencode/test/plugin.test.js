@@ -172,17 +172,16 @@ test("each model call carries only the messages added since the previous reply",
   ])
 })
 
-test("the session title call carries its prompt and the title it produced", async () => {
+test("the session title call carries the title it produced and no messages", async () => {
   const title = (await spans((recorder) => {
     recorder.event(event("session.execution.started"))
-    recorder.title({ sessionID, system: [{ type: "text", text: "name it" }], messages: [{ role: "user", content: [{ type: "text", text: "read it" }] }] })
     recorder.response(call("title", "call_title", "msg_title"))
     recorder.event(event("session.renamed", { title: "Reading a note" }))
     recorder.event(event("session.execution.succeeded"))
   })).at(-1)
-  assert.deepEqual(JSON.parse(title.values["gen_ai.system_instructions"]), [{ type: "text", content: "name it" }])
-  assert.equal(JSON.parse(title.values["gen_ai.input.messages"])[0].parts[0].content, "read it")
-  assert.equal(JSON.parse(title.values["gen_ai.output.messages"])[0].parts[0].content, "Reading a note")
+  assert.equal(title.values["opencode.session.title"], "Reading a note")
+  assert.equal(title.values["gen_ai.input.messages"], undefined)
+  assert.equal(title.values["gen_ai.output.messages"], undefined)
 })
 
 test("a subagent's turn joins its parent's trace under the tool call that started it", async () => {
