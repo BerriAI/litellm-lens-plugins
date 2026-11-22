@@ -81,6 +81,16 @@ class PluginTests(Case):
         self.assertEqual(state.config()["capture_mode"], "plugin")
         self.assertTrue(state.config()["enabled"])
 
+    def test_setup_follows_a_codex_home_that_changed_since_the_last_setup(self):
+        state.save_config({**state.config(), "codex_home": str(self.codex / "old")})
+        moved = self.codex / "new"
+        with patch.dict(os.environ, {"LENS_CODEX_PLUGIN_ROOT": str(ROOT), "CODEX_HOME": str(moved)}), \
+                patch.object(codex, "approve_installed_hooks"), patch.object(web, "verify"):
+            web.configure({"gateway": "https://gateway.example", "api_key": "test-private-key",
+                           "agent_name": "my-codex"})
+        self.assertEqual(state.config()["codex_home"], str(moved))
+        self.assertEqual(json.loads((state.state_dir() / "installation.json").read_text())["codex_home"], str(moved.resolve()))
+
     def test_plugin_uninstall_preserves_other_hooks_and_removes_key(self):
         (self.codex / "hooks.json").write_text('{"hooks": {"Stop": []}}')
         state.atomic_json(state.state_dir() / "installation.json",

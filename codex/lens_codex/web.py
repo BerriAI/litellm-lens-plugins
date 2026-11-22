@@ -55,7 +55,8 @@ def configure(value: dict, check: bool = True, *, enabled: bool = True) -> None:
             raise ValueError("There are saved turns for the current gateway. Resolve them before changing gateways.")
     settings = {**old, "gateway": gateway, "api_key": key, "agent_name": name,
                 "enabled": enabled, "installation_id": old.get("installation_id", str(uuid.uuid4())),
-                "codex_home": old.get("codex_home", str(Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()))}
+                # Setup runs inside the Codex being connected, so its CODEX_HOME wins over a remembered one.
+                "codex_home": str(Path(os.environ.get("CODEX_HOME") or old.get("codex_home") or "~/.codex").expanduser())}
     if check:
         verify(settings)
     copy_app()
