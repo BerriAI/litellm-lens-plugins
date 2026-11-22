@@ -1,0 +1,26 @@
+{
+  "name": "litellm-lens-opencode",
+  "version": "0.1.0",
+  "description": "Sends OpenCode sessions to LiteLLM Lens as traces",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "src"
+  ],
+  "engines": {
+    "opencode": ">=2.3.2"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BerriAI/litellm-lens-plugins.git",
+    "directory": "opencode"
+  }
+}

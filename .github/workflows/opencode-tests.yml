@@ -1,0 +1,27 @@
+name: OpenCode plugin tests
+on:
+  push:
+    paths: ['opencode/**', 'package.json', '.github/workflows/opencode-tests.yml']
+  pull_request:
+    paths: ['opencode/**', 'package.json', '.github/workflows/opencode-tests.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ['22', '24']
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: opencode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+      - run: node -e "import('litellm-lens-plugins').then((plugin) => { if (plugin.default.id !== 'litellm-lens') process.exit(1) })"
+        working-directory: .
