@@ -24,6 +24,23 @@ class SessionTests(Case):
     def item(self, item, turn='t', start=1000):
         return self.codex_event('item_completed', turn_id=turn, item=item, started_at_ms=start, completed_at_ms=start+50)
 
+    def test_tool_is_timed_from_its_call_record_to_its_output_record(self):
+        def at(second, record):
+            return {**record, 'timestamp': f'2026-10-05T00:00:{second:06.3f}Z'}
+        command = lambda identity: {'type': 'CommandExecution', 'id': identity, 'command': ['sh', '-c', 'pwd'], 'exit_code': 0}
+        call = lambda kind, identity: {'type': 'response_item', 'payload': {'type': kind, 'call_id': identity}}
+        records = [self.codex_event('task_started', turn_id='t'),
+                   at(10, call('custom_tool_call', 'one')),
+                   at(10.3, self.item(command('first'), start=1791158410300)),
+                   at(10.4, self.item(command('second'), start=1791158410400)),
+                   at(10.6, call('custom_tool_call_output', 'one')),
+                   at(12, self.item(command('alone'), start=1791158412000)),
+                   self.codex_event('task_complete', turn_id='t')]
+        tools = {e.identity: e for e in read_recording(str(self.file('codex', records)), 0, 't').entries}
+        base = tools['first'].start
+        spans = {name: (round(e.start - base, 3), round(e.end - base, 3)) for name, e in tools.items()}
+        self.assertEqual(spans, {'first': (0.0, 0.3), 'second': (0.3, 0.6), 'alone': (2.0, 2.05)})
+
     def test_visible_items_preserve_commentary_repeats_failure_and_model(self):
         records = [self.codex_event('task_started', turn_id='t'),
                    {'type': 'turn_context', 'payload': {'turn_id': 't', 'model': 'model-a'}},
