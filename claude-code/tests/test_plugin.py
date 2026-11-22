@@ -78,7 +78,7 @@ class Transcript(unittest.TestCase):
         self.assertNotIn("secret", json.dumps(spans))
         self.assertEqual(json.loads(call["gen_ai.output.messages"]), [{"role": "assistant", "parts": [
             {"type": "tool_call", "id": "toolu_1", "name": "Bash", "arguments": {"command": "ls"}}]}])
-        self.assertEqual(json.loads(attributes(spans[2])["gen_ai.input.messages"]), [{"role": "user", "parts": [
+        self.assertEqual(json.loads(attributes(spans[2])["gen_ai.input.messages"]), [{"role": "tool", "parts": [
             {"type": "tool_call_response", "id": "toolu_1", "response": "a.txt"}]}])
         self.assertEqual(attributes(spans[3])["gen_ai.tool.call.result"], "a.txt")
         self.assertIn("One file.", attributes(spans[0])["gen_ai.output.messages"])

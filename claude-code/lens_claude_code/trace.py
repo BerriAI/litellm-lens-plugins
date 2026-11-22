@@ -57,7 +57,17 @@ def plain(content: object) -> object:
 
 
 def messages(items: list[dict]) -> str:
-    return encode([{"role": item["role"], "parts": parts(item["content"])} for item in items])
+    """Messages as GenAI parts; a tool result is a tool message, not something the user typed."""
+    result = []
+    for item in items:
+        start = len(result)
+        for part in parts(item["content"]):
+            role = "tool" if part["type"] == "tool_call_response" else item["role"]
+            if len(result) > start and result[-1]["role"] == role:
+                result[-1]["parts"].append(part)
+            else:
+                result.append({"role": role, "parts": [part]})
+    return encode(result)
 
 
 def encode(value: object) -> str:
