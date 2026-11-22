@@ -89,6 +89,34 @@ class SetupTests(Case):
                 setup.terminal_setup()
         self.assertFalse(state.config()["enabled"])
 
+    def test_unattended_setup_reads_the_key_from_the_named_variable_and_starts_recording(self):
+        state.save_config({})
+        saved = {}
+        def configure(value, enabled=True):
+            saved.update(value)
+            state.save_config({"gateway": value["gateway"], "api_key": value["api_key"], "enabled": enabled})
+        output = io.StringIO()
+        with patch.dict(os.environ, {"LENS_TEST_KEY": " sk-secret "}), \
+                patch.object(setup, "configure", side_effect=configure), \
+                patch.object(setup, "start_helper", return_value=18734), \
+                patch.object(setup, "open", create=True, side_effect=AssertionError("no terminal prompt")), \
+                contextlib.redirect_stdout(output):
+            setup.terminal_setup("https://gateway.example/", "LENS_TEST_KEY", "codex-ci")
+        self.assertEqual(saved, {"gateway": "https://gateway.example", "api_key": "sk-secret", "agent_name": "codex-ci"})
+        self.assertTrue(state.config()["enabled"])
+        self.assertNotIn("sk-secret", output.getvalue())
+
+    def test_unattended_setup_needs_both_options_and_a_set_key(self):
+        state.save_config({})
+        with patch.object(setup, "configure") as configure, patch.object(setup, "start_helper") as helper:
+            with self.assertRaisesRegex(ValueError, "--url and --key-env together"):
+                setup.terminal_setup("http://gateway.example", None)
+            with patch.dict(os.environ, {"LENS_TEST_KEY": ""}):
+                with self.assertRaisesRegex(ValueError, "LENS_TEST_KEY is empty"):
+                    setup.terminal_setup("http://gateway.example", "LENS_TEST_KEY")
+        configure.assert_not_called()
+        helper.assert_not_called()
+
     def test_cancel_does_not_start_helper(self):
         state.save_config({})
         with patch.object(setup, "open", create=True, side_effect=[io.StringIO(), io.StringIO()]), \
