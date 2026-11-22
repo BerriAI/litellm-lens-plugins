@@ -206,6 +206,6 @@ class SessionTests(Case):
         # A tool result goes in as a tool message, so Lens does not show it as a user prompt.
         self.assertEqual(json.loads(second[1]['gen_ai.input.messages']), [{'role': 'tool', 'parts': [
             {'type': 'tool_call_response', 'id': tool_id, 'response': 'ok'}]}])
-        # The second call cannot have started before the tool it waited for had finished.
-        self.assertEqual(second[0]['startTimeUnixNano'], str(104 * 10**9))
+        # The second call starts just after the tool it waited for, so it never sorts before that tool.
+        self.assertEqual(second[0]['startTimeUnixNano'], str(104 * 10**9 + 10**6))
         self.assertEqual(len({span['spanId'] for span, _ in calls}), 2)

@@ -166,6 +166,9 @@ def build_trace(turn: dict, rows: list[dict], settings: dict, usage: dict | None
         following = calls[index + 1].end if index + 1 < len(calls) else float("inf")
         read = [entry for entry in tools if previous < entry.end <= call.end]
         start = max([turn["started"] if index == 0 else previous] + [entry.end for entry in read])
+        if read:
+            # Codex often stamps a tool with one instant; start just after it so the call sorts after what it read.
+            start = min(start + 0.001, max(start, call.end))
         sent = [messages_item("user", [text_part(clean(entry.text)) for entry in said
                                        if entry.role == "user" and entry.text and previous < entry.end <= call.end])]
         sent += [messages_item("tool", [{"type": "tool_call_response", "id": entry.identity,
