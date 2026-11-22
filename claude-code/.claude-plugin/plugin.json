@@ -1,0 +1,22 @@
+{
+  "name": "litellm-lens",
+  "version": "0.1.0",
+  "description": "Send Claude Code sessions to LiteLLM Lens: prompts, replies, model calls and tools.",
+  "author": {"name": "BerriAI"},
+  "license": "MIT",
+  "userConfig": {
+    "lens_url": {
+      "type": "string",
+      "title": "LiteLLM gateway URL",
+      "description": "Base URL of the LiteLLM gateway, for example https://gateway.example.com. A standalone Lens URL works as well",
+      "required": true
+    },
+    "lens_key": {
+      "type": "string",
+      "title": "LiteLLM key",
+      "description": "LiteLLM key sent with each trace, so the gateway records its user and team. For a standalone Lens, a Lens tracing key",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

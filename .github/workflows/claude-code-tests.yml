@@ -1,0 +1,28 @@
+name: Claude Code plugin tests
+on:
+  push:
+    paths: ['claude-code/**', '.claude-plugin/**', '.github/workflows/claude-code-tests.yml']
+  pull_request:
+    paths: ['claude-code/**', '.claude-plugin/**', '.github/workflows/claude-code-tests.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ['3.11', '3.14']
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: claude-code
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+        env:
+          LENS_SETTLE_SECONDS: "0"
+      - run: python -m compileall -q lens_claude_code

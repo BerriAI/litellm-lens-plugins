@@ -1,0 +1,11 @@
+{
+  "name": "berriai-lens",
+  "owner": {"name": "BerriAI"},
+  "plugins": [
+    {
+      "name": "litellm-lens",
+      "source": "./claude-code",
+      "description": "Send Claude Code sessions to LiteLLM Lens: prompts, replies, model calls and tools."
+    }
+  ]
+}
