@@ -1,10 +1,10 @@
 import { readConfig } from "./src/config.js"
-import { send } from "./src/export.js"
+import { report, send } from "./src/export.js"
 import { Recorder } from "./src/recorder.js"
 import { payload } from "./src/spans.js"
 import { responseId } from "./src/response.js"
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 export default {
   id: "litellm-lens",
@@ -17,7 +17,7 @@ export default {
       onTurn(turn) {
         const delivery = turn.settled
           .then(() => send(config, payload(turn, { version, opencode: context.app?.version, limit: config.limit })))
-          .catch((error) => config.debug && console.error(`[litellm-lens] ${error.message}`))
+          .catch((error) => report(error.message))
           .finally(() => deliveries.delete(delivery))
         deliveries.add(delivery)
       },

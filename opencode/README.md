@@ -42,10 +42,10 @@ The same settings can live in `opencode.json` instead of the environment
 
 | Option | Environment variable | Meaning |
 | --- | --- | --- |
-| `url` | `LITELLM_LENS_OPENCODE_URL` | Gateway or Lens address. `/v1/traces` is added when missing |
+| `url` | `LITELLM_LENS_OPENCODE_URL` | Gateway or Lens address. `/v1/traces` is added, and a trailing `/v1` (the form a model base URL has) is accepted |
 | `apiKey` | `LITELLM_LENS_OPENCODE_API_KEY` | LiteLLM key, or a Lens tracing key |
 | `maxContentLength` | `LITELLM_LENS_OPENCODE_MAX_CONTENT_LENGTH` | Longest prompt, reply or tool result kept, in characters. Default 200000 |
-| `debug` | `LITELLM_LENS_OPENCODE_DEBUG` | Print delivery failures to the service log |
+| `debug` | `LITELLM_LENS_OPENCODE_DEBUG` | Also print event stream errors |
 
 Options win over environment variables
 
@@ -59,7 +59,7 @@ One trace per turn, grouped into a session by OpenCode's session id
 
 Cost is never taken from OpenCode's own estimate. Lens matches each model call to the gateway's spend record by the provider's response id, which the plugin reads from the start of the response
 
-A trace is sent when the turn ends. A failed delivery is retried twice and then dropped, so a Lens outage never blocks OpenCode
+A trace is sent when the turn ends. A failed delivery is retried twice and then dropped, so a Lens outage never blocks OpenCode. Each dropped trace adds a line with the address and the error to `~/.local/state/litellm-lens/opencode.log` (under `$XDG_STATE_HOME` when set) and to the server's stderr, which `opencode run --print-logs` shows. If no trace arrives, read that file first
 
 ## Develop
 
