@@ -4,7 +4,7 @@ import { Recorder } from "./src/recorder.js"
 import { payload } from "./src/spans.js"
 import { responseId } from "./src/response.js"
 
-const version = "0.1.1"
+const version = "0.1.2"
 
 export default {
   id: "litellm-lens",
@@ -24,6 +24,7 @@ export default {
     })
     const hooks = await Promise.all([
       context.session.hook("context", (input) => recorder.context(input)),
+      context.session.hook("title", (input) => recorder.title(input)),
       context.session.hook("http.request", (input) => recorder.request(input.request)),
       context.session.hook("http.response", (input) =>
         recorder.response({

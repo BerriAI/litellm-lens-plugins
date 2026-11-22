@@ -59,6 +59,7 @@ function span(turn, fields, values) {
       "session.id": turn.sessionID,
       "gen_ai.conversation.id": turn.sessionID,
       "gen_ai.agent.name": agent,
+      "opencode.subagent.session.id": turn.subagentID,
       ...values,
     }),
     ...(fields.status ? { status: fields.status } : {}),
@@ -132,7 +133,7 @@ function toolSpan(turn, tool, limit) {
   )
 }
 
-function otherSpan(turn, call) {
+function otherSpan(turn, call, limit) {
   return span(
     turn,
     {
@@ -143,7 +144,17 @@ function otherSpan(turn, call) {
       start: call.start,
       end: call.end,
     },
-    { ...modelValues(call.model, call.call), "opencode.request.kind": call.kind },
+    {
+      ...modelValues(call.model, call.call),
+      "opencode.request.kind": call.kind,
+      "gen_ai.system_instructions": call.context?.system.length
+        ? clip(JSON.stringify(call.context.system.map((item) => ({ type: "text", content: item.text }))), limit)
+        : undefined,
+      "gen_ai.input.messages": call.context ? messages(call.context.messages, limit) : undefined,
+      "gen_ai.output.messages": call.output
+        ? messages([{ role: "assistant", content: [{ type: "text", text: call.output }] }], limit)
+        : undefined,
+    },
   )
 }
 
@@ -153,6 +164,7 @@ export function payload(turn, { version, opencode, limit }) {
     turn,
     {
       spanId: turn.spanId,
+      parentSpanId: turn.parentSpanId,
       name: `invoke_agent ${agent}`,
       start: turn.start,
       end: turn.end,
@@ -180,7 +192,7 @@ export function payload(turn, { version, opencode, limit }) {
               root,
               ...turn.steps.map((step) => stepSpan(turn, step, limit)),
               ...[...turn.tools.values()].map((tool) => toolSpan(turn, tool, limit)),
-              ...turn.other.map((call) => otherSpan(turn, call)),
+              ...turn.other.map((call) => otherSpan(turn, call, limit)),
             ],
           },
         ],

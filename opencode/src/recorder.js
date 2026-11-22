@@ -16,7 +16,15 @@ export class Recorder {
   }
 
   context(input) {
+    const answered = input.messages.findLastIndex((message) => message.role === "assistant")
     this.#session(input.sessionID).context = {
+      system: structuredClone(input.system),
+      messages: structuredClone(input.messages.slice(answered + 1)),
+    }
+  }
+
+  title(input) {
+    this.#session(input.sessionID).titleContext = {
       system: structuredClone(input.system),
       messages: structuredClone(input.messages),
     }
@@ -41,7 +49,14 @@ export class Recorder {
     })
     if (!response.ok) return
     if (response.kind === "primary") session.responses.push(call)
-    else this.#turn(session).other.push({ ...call, spanId: id(8), call })
+    else {
+      this.#turn(session).other.push({
+        ...call,
+        spanId: id(8),
+        call,
+        context: response.kind === "title" ? session.titleContext : undefined,
+      })
+    }
   }
 
   event(event) {
@@ -50,6 +65,21 @@ export class Recorder {
     const session = this.#session(data.sessionID)
     const step = () => this.#turn(session).steps.find((item) => item.id === data.assistantMessageID)
     switch (event.type) {
+      case "session.created":
+        session.parentID = data.parentID
+        return
+      case "session.renamed": {
+        const titled = session.turn?.other.findLast((call) => call.kind === "title")
+        if (titled) titled.output = data.title
+        return
+      }
+      case "session.tool.progress": {
+        const child = data.metadata?.sessionID
+        const tool = session.turn?.tools.get(data.id)
+        if (!child || !tool || this.#session(child).parentID !== session.id) return
+        this.#session(child).spawn = { root: session.turn.sessionID, traceId: session.turn.traceId, spanId: tool.spanId }
+        return
+      }
       case "session.inbox.enqueued":
         if (data.item?.type === "user") session.inbox.set(data.inboxID, data.item.payload?.text ?? "")
         return
@@ -128,8 +158,10 @@ export class Recorder {
 
   #turn(session) {
     session.turn ??= {
-      sessionID: session.id,
-      traceId: id(16),
+      sessionID: session.spawn?.root ?? session.id,
+      subagentID: session.spawn ? session.id : undefined,
+      traceId: session.spawn?.traceId ?? id(16),
+      parentSpanId: session.spawn?.spanId,
       spanId: id(8),
       start: this.#now(),
       prompts: [],
