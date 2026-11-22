@@ -1,0 +1,21 @@
+{
+  "name": "litellm-lens",
+  "version": "0.5.0",
+  "description": "Send visible Codex session messages, tools, and subagents to LiteLLM Lens.",
+  "author": {
+    "name": "BerriAI"
+  },
+  "homepage": "https://github.com/BerriAI/litellm-lens-plugins",
+  "repository": "https://github.com/BerriAI/litellm-lens-plugins",
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "LiteLLM Lens",
+    "shortDescription": "See your Codex chats and tools in Lens.",
+    "developerName": "BerriAI",
+    "category": "Productivity",
+    "defaultPrompt": [
+      "Set up LiteLLM Lens for my Codex chats."
+    ]
+  }
+}
