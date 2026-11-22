@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { readConfig } from "../src/config.js"
-import { send } from "../src/export.js"
+import { mkdtemp, readFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { failureLog, report, send } from "../src/export.js"
 import { Recorder } from "../src/recorder.js"
 import { responseId } from "../src/response.js"
 import { payload } from "../src/spans.js"
@@ -162,6 +165,13 @@ test("the plugin stays off until both a URL and a key are set", () => {
   assert.deepEqual([fromEnv.endpoint, fromEnv.key], ["http://lens/v1/traces", "sk-2"])
 })
 
+test("a model base URL ending in /v1 posts to the same traces endpoint", () => {
+  for (const url of ["http://gateway/v1", "http://gateway/v1/", "http://gateway/proxy/v1", "http://gateway/v1/traces/"]) {
+    const base = url.includes("proxy") ? "http://gateway/proxy" : "http://gateway"
+    assert.equal(readConfig({ url, apiKey: "sk-1" }, {}).endpoint, `${base}/v1/traces`)
+  }
+})
+
 test("the response id is read from a stream without consuming the response", async () => {
   const stream = 'event: message_start\ndata: {"type":"message_start","message":{"model":"m","id":"msg_9"}}\n\n'
   const response = new Response(stream)
@@ -182,6 +192,13 @@ test("sending retries server errors and gives up on a rejected key", async () =>
   assert.deepEqual(seen, Array(2).fill(["http://gateway/v1/traces", "Bearer sk-1"]))
   let attempts = 0
   const refused = async () => ((attempts += 1), { status: 401 })
-  await assert.rejects(send(config, {}, { post: refused, sleep: async () => {} }), /HTTP 401/)
+  await assert.rejects(send(config, {}, { post: refused, sleep: async () => {} }), /not sent to http:\/\/gateway\/v1\/traces: HTTP 401/)
   assert.equal(attempts, 1)
+})
+
+test("a failed upload is written to the failure log", async () => {
+  const file = failureLog({ XDG_STATE_HOME: await mkdtemp(join(tmpdir(), "lens-")) })
+  assert.match(file, /litellm-lens\/opencode\.log$/)
+  await report("trace not sent to http://gateway/v1/traces: HTTP 404", { file, now: new Date(0) })
+  assert.equal(await readFile(file, "utf8"), "1970-01-01T00:00:00.000Z trace not sent to http://gateway/v1/traces: HTTP 404\n")
 })
