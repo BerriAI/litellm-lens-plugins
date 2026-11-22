@@ -1,0 +1,11 @@
+{
+  "name": "litellm-lens-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lens plugins for coding agents",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./opencode/index.js"
+  }
+}
