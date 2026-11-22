@@ -67,7 +67,9 @@ export class Recorder {
         return
       }
       case "session.inbox.enqueued":
-        if (data.item?.type === "user") session.inbox.set(data.inboxID, data.item.payload?.text ?? "")
+        if (data.item?.type === "user" || data.item?.type === "synthetic") {
+          session.inbox.set(data.inboxID, data.item.payload?.text ?? "")
+        }
         return
       case "session.inbox.delivered":
         if (!session.inbox.has(data.inboxID)) return

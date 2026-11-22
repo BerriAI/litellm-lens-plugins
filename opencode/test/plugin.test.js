@@ -172,6 +172,16 @@ test("each model call carries only the messages added since the previous reply",
   ])
 })
 
+test("a turn started by a subagent's completion notice has that notice as its prompt", async () => {
+  const [root] = await spans((recorder) => {
+    recorder.event(event("session.inbox.enqueued", { inboxID: "in_1", item: { type: "synthetic", payload: { text: "<subagent>2 words</subagent>" } } }))
+    recorder.event(event("session.execution.started"))
+    recorder.event(event("session.inbox.delivered", { inboxID: "in_1" }))
+    recorder.event(event("session.execution.succeeded"))
+  })
+  assert.equal(JSON.parse(root.values["gen_ai.input.messages"])[0].parts[0].content, "<subagent>2 words</subagent>")
+})
+
 test("the session title call carries the title it produced and no messages", async () => {
   const title = (await spans((recorder) => {
     recorder.event(event("session.execution.started"))
