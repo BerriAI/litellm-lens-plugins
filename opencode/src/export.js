@@ -26,7 +26,7 @@ export async function send(config, body, { post = fetch, sleep = (ms) => new Pro
 export const failureLog = (env = process.env) =>
   join(env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "litellm-lens", "opencode.log")
 
-// The background service discards stderr, so a failed upload is also written to a file.
+// The background service discards stderr, so what the user must know is also written to a file.
 export async function report(message, { file = failureLog(), now = new Date() } = {}) {
   console.error(`[litellm-lens] ${message}`)
   await mkdir(dirname(file), { recursive: true })

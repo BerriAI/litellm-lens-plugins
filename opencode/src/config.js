@@ -12,3 +12,11 @@ export function readConfig(options = {}, env = {}) {
     debug: Boolean(options.debug ?? text(env.LITELLM_LENS_OPENCODE_DEBUG)),
   }
 }
+
+export function missing(options = {}, env = {}) {
+  const unset = [
+    !(text(options.url) ?? text(env.LITELLM_LENS_OPENCODE_URL)) && "LITELLM_LENS_OPENCODE_URL",
+    !(text(options.apiKey) ?? text(env.LITELLM_LENS_OPENCODE_API_KEY)) && "LITELLM_LENS_OPENCODE_API_KEY",
+  ].filter(Boolean)
+  return `not recording: ${unset.join(" and ")} ${unset.length > 1 ? "are" : "is"} not set in OpenCode's background service. Run \`opencode service restart\` from a terminal where both are set`
+}

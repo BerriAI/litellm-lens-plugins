@@ -1,16 +1,16 @@
-import { readConfig } from "./src/config.js"
+import { missing, readConfig } from "./src/config.js"
 import { report, send } from "./src/export.js"
 import { Recorder } from "./src/recorder.js"
 import { payload } from "./src/spans.js"
 import { responseId } from "./src/response.js"
 
-const version = "0.1.2"
+const version = "0.1.3"
 
 export default {
   id: "litellm-lens",
   async setup(context) {
     const config = readConfig(context.options, process.env)
-    if (!config) return
+    if (!config) return void (await report(missing(context.options, process.env)))
     const deliveries = new Set()
     const recorder = new Recorder({
       now: Date.now,

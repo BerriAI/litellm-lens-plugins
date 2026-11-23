@@ -19,11 +19,13 @@ export LITELLM_LENS_OPENCODE_API_KEY=sk-your-litellm-key
 
 With Lens on its own, use the Lens address and a Lens tracing key. Model calls then show tokens and no cost
 
-Restart OpenCode's background service so it picks up the variables
+OpenCode runs sessions in a background service, and the plugin reads the variables from that service, not from the terminal you type in. Restart the service from a terminal where both are set, so it starts with them
 
 ```sh
-opencode service stop
+opencode service restart
 ```
+
+The service keeps running after OpenCode closes. If it was started without the variables, nothing is recorded until you restart it this way, and the plugin writes a line saying so, with this command, to `~/.local/state/litellm-lens/opencode.log`
 
 The same settings can live in `opencode.json` instead of the environment
 
@@ -61,7 +63,7 @@ A subagent's turns sit under the `execute_tool subagent` call that started it, i
 
 Cost is never taken from OpenCode's own estimate. Lens matches each model call to the gateway's spend record by the provider's response id, which the plugin reads from the start of the response
 
-A trace is sent when the turn ends. A failed delivery is retried twice and then dropped, so a Lens outage never blocks OpenCode. Each dropped trace adds a line with the address and the error to `~/.local/state/litellm-lens/opencode.log` (under `$XDG_STATE_HOME` when set) and to the server's stderr, which `opencode run --print-logs` shows. If no trace arrives, read that file first
+A trace is sent when the turn ends. A failed delivery is retried twice and then dropped, so a Lens outage never blocks OpenCode. Each dropped trace adds a line with the address and the error to `~/.local/state/litellm-lens/opencode.log` (under `$XDG_STATE_HOME` when set) and to the server's stderr, which `opencode run --print-logs` shows. When the plugin is installed without a URL or a key, it writes one line to the same file each time it loads. If no trace arrives, read that file first
 
 ## Develop
 

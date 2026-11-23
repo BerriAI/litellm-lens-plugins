@@ -42,7 +42,7 @@ Claude Code asks for your LiteLLM gateway URL and a LiteLLM key on install. The 
 opencode plugin add github:BerriAI/litellm-lens-plugins
 export LITELLM_LENS_OPENCODE_URL=https://litellm.example.com
 export LITELLM_LENS_OPENCODE_API_KEY=sk-your-litellm-key
-opencode service stop
+opencode service restart
 ```
 
 The plugin stays off until both variables are set, because it uploads what the agent reads and writes. See [`opencode/README.md`](opencode/README.md) for what is recorded and the settings.
