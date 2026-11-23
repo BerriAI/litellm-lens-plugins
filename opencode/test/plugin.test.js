@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { readConfig } from "../src/config.js"
+import { missing, readConfig } from "../src/config.js"
 import { mkdtemp, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -229,6 +229,14 @@ test("the plugin stays off until both a URL and a key are set", () => {
   assert.equal(readConfig({ url: "http://gateway/", apiKey: "sk-1" }, {}).endpoint, "http://gateway/v1/traces")
   const fromEnv = readConfig({}, { LITELLM_LENS_OPENCODE_URL: "http://lens/v1/traces", LITELLM_LENS_OPENCODE_API_KEY: "sk-2" })
   assert.deepEqual([fromEnv.endpoint, fromEnv.key], ["http://lens/v1/traces", "sk-2"])
+})
+
+test("a missing setting is named with the command that loads it", () => {
+  assert.equal(
+    missing({}, { LITELLM_LENS_OPENCODE_URL: "http://gateway" }),
+    "not recording: LITELLM_LENS_OPENCODE_API_KEY is not set in OpenCode's background service. Run `opencode service restart` from a terminal where both are set",
+  )
+  assert.match(missing({}, {}), /LITELLM_LENS_OPENCODE_URL and LITELLM_LENS_OPENCODE_API_KEY are not set/)
 })
 
 test("a model base URL ending in /v1 posts to the same traces endpoint", () => {

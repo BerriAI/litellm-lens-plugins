@@ -1,6 +1,6 @@
 {
   "name": "litellm-lens-opencode",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Sends OpenCode sessions to LiteLLM Lens as traces",
   "license": "MIT",
   "type": "module",
