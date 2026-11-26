@@ -16,7 +16,7 @@ export default {
       now: Date.now,
       onTurn(turn) {
         const delivery = turn.settled
-          .then(() => send(config, payload(turn, { version, opencode: context.app?.version, limit: config.limit })))
+          .then(() => send(config, payload(turn, { version, opencode: context.app?.version, limit: config.limit, agent: config.agent })))
           .catch((error) => report(error.message))
           .finally(() => deliveries.delete(delivery))
         deliveries.add(delivery)

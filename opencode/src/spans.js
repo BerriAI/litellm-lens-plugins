@@ -1,5 +1,4 @@
 const scope = "berriai.lens.opencode"
-const agent = "opencode"
 
 const value = (item) => {
   if (typeof item === "boolean") return { boolValue: item }
@@ -46,7 +45,7 @@ const messages = (list, limit) =>
 
 const failure = (error) => (error ? { code: 2, message: String(error.message ?? display(error)).slice(0, 1000) } : undefined)
 
-function span(turn, fields, values) {
+function span(turn, fields, values, agent) {
   return {
     traceId: turn.traceId,
     spanId: fields.spanId,
@@ -76,7 +75,7 @@ function modelValues(model, call) {
   }
 }
 
-function stepSpan(turn, step, limit) {
+function stepSpan(turn, step, limit, agent) {
   const output = [
     ...step.reasoning.map((text) => ({ type: "reasoning", text })),
     ...step.text.map((text) => ({ type: "text", text })),
@@ -109,10 +108,11 @@ function stepSpan(turn, step, limit) {
       "gen_ai.input.messages": step.context ? messages(step.context.messages, limit) : undefined,
       "gen_ai.output.messages": output.length ? messages([{ role: "assistant", content: output }], limit) : undefined,
     },
+    agent,
   )
 }
 
-function toolSpan(turn, tool, limit) {
+function toolSpan(turn, tool, limit, agent) {
   return span(
     turn,
     {
@@ -130,10 +130,11 @@ function toolSpan(turn, tool, limit) {
       "gen_ai.tool.call.arguments": tool.input === undefined ? undefined : clip(JSON.stringify(tool.input), limit),
       "gen_ai.tool.call.result": tool.output === undefined ? undefined : clip(resultText(tool.output), limit),
     },
+    agent,
   )
 }
 
-function otherSpan(turn, call) {
+function otherSpan(turn, call, agent) {
   return span(
     turn,
     {
@@ -149,10 +150,11 @@ function otherSpan(turn, call) {
       "opencode.request.kind": call.kind,
       "opencode.session.title": call.title,
     },
+    agent,
   )
 }
 
-export function payload(turn, { version, opencode, limit }) {
+export function payload(turn, { version, opencode, limit, agent = "opencode" }) {
   const reply = turn.steps.flatMap((step) => step.text).at(-1)
   const root = span(
     turn,
@@ -174,6 +176,7 @@ export function payload(turn, { version, opencode, limit }) {
         ? messages([{ role: "assistant", content: [{ type: "text", text: reply }] }], limit)
         : undefined,
     },
+    agent,
   )
   return {
     resourceSpans: [
@@ -184,9 +187,9 @@ export function payload(turn, { version, opencode, limit }) {
             scope: { name: scope, version },
             spans: [
               root,
-              ...turn.steps.map((step) => stepSpan(turn, step, limit)),
-              ...[...turn.tools.values()].map((tool) => toolSpan(turn, tool, limit)),
-              ...turn.other.map((call) => otherSpan(turn, call)),
+              ...turn.steps.map((step) => stepSpan(turn, step, limit, agent)),
+              ...[...turn.tools.values()].map((tool) => toolSpan(turn, tool, limit, agent)),
+              ...turn.other.map((call) => otherSpan(turn, call, agent)),
             ],
           },
         ],
