@@ -48,6 +48,7 @@ The same settings can live in `opencode.json` instead of the environment
 | `apiKey` | `LITELLM_LENS_OPENCODE_API_KEY` | LiteLLM key, or a Lens tracing key |
 | `maxContentLength` | `LITELLM_LENS_OPENCODE_MAX_CONTENT_LENGTH` | Longest prompt, reply or tool result kept, in characters. Default 200000 |
 | `debug` | `LITELLM_LENS_OPENCODE_DEBUG` | Also print event stream errors |
+| `agent` | `LITELLM_LENS_OPENCODE_AGENT` | Agent name Lens files the sessions under, in `gen_ai.agent.name` and `service.name`. Default `opencode` |
 
 Options win over environment variables
 

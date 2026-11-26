@@ -10,6 +10,7 @@ export function readConfig(options = {}, env = {}) {
     key,
     limit: Number(options.maxContentLength ?? env.LITELLM_LENS_OPENCODE_MAX_CONTENT_LENGTH) || 200_000,
     debug: Boolean(options.debug ?? text(env.LITELLM_LENS_OPENCODE_DEBUG)),
+    agent: text(options.agent) ?? text(env.LITELLM_LENS_OPENCODE_AGENT) ?? "opencode",
   }
 }
 

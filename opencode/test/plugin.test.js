@@ -231,6 +231,20 @@ test("the plugin stays off until both a URL and a key are set", () => {
   assert.deepEqual([fromEnv.endpoint, fromEnv.key], ["http://lens/v1/traces", "sk-2"])
 })
 
+test("the agent name defaults to opencode and an option or variable replaces it", () => {
+  const config = (options, env) => readConfig({ url: "http://lens", apiKey: "sk-1", ...options }, env)
+  assert.equal(config({}, {}).agent, "opencode")
+  assert.equal(config({}, { LITELLM_LENS_OPENCODE_AGENT: "reviewer" }).agent, "reviewer")
+  assert.equal(config({ agent: "planner" }, { LITELLM_LENS_OPENCODE_AGENT: "reviewer" }).agent, "planner")
+  const turn = { traceId: "t", spanId: "s", sessionID: "x", start: 1, end: 2, prompts: [], steps: [], tools: new Map(), other: [] }
+  const body = payload(turn, { version: "0.1.0", opencode: "2.3.2", limit: 100, agent: "reviewer" })
+  const [resource] = body.resourceSpans
+  const [root] = resource.scopeSpans[0].spans
+  assert.equal(resource.resource.attributes.find((item) => item.key === "service.name").value.stringValue, "reviewer")
+  assert.equal(root.name, "invoke_agent reviewer")
+  assert.equal(root.attributes.find((item) => item.key === "gen_ai.agent.name").value.stringValue, "reviewer")
+})
+
 test("a missing setting is named with the command that loads it", () => {
   assert.equal(
     missing({}, { LITELLM_LENS_OPENCODE_URL: "http://gateway" }),
