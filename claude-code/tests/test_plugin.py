@@ -83,6 +83,19 @@ class Transcript(unittest.TestCase):
         self.assertEqual(attributes(spans[3])["gen_ai.tool.call.result"], "a.txt")
         self.assertIn("One file.", attributes(spans[0])["gen_ai.output.messages"])
 
+    def test_only_api_error_records_mark_a_turn_as_failed(self):
+        def synthetic(content, **fields):
+            return line("assistant", 8, uuid="s8", message={"model": "<synthetic>", "content": content}, **fields)
+
+        self.path.write_text("\n".join(SESSION + [
+            synthetic([]), synthetic([{"type": "text", "text": "No response requested."}]),
+            line("user", 9, uuid="u4", message={"role": "user", "content": "again"}),
+            synthetic([{"type": "text", "text": "API Error: Connection error."}], isApiErrorMessage=True),
+        ]) + "\n")
+        found = turns(read_lines(str(self.path)))
+        self.assertEqual([turn.error for turn in found], [None, None, "API Error: Connection error."])
+        self.assertEqual([len(turn.calls) for turn in found], [2, 0, 0])
+
     def test_a_partial_last_line_is_ignored(self):
         self.path.write_text("\n".join(SESSION[:3]) + "\n" + SESSION[3][:40])
         self.assertEqual(turns(read_lines(str(self.path)))[0].tools, [])
