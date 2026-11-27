@@ -108,7 +108,8 @@ def turns(records: list[dict]) -> list[Turn]:
         elif kind == "api-request":
             requested = stamp
         elif kind == "assistant" and message.get("model") == "<synthetic>":
-            result[-1].error = text_of(content) or "The request failed."
+            if record.get("isApiErrorMessage"):
+                result[-1].error = text_of(content) or "The request failed."
         elif kind == "assistant" and message.get("id"):
             turn = result[-1]
             identity = message["id"]
